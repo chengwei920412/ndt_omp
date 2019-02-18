@@ -61,3 +61,16 @@ target_link_libraries(align
   ${PCL_LIBRARIES}
   ndt_omp
 )
+
+add_executable(locate
+        apps/locate/locate.cpp
+        apps/locate/file-system-tools.cpp
+        )
+add_dependencies(locate
+        ndt_omp
+        )
+target_link_libraries(locate
+        ${catkin_LIBRARIES}
+        ${PCL_LIBRARIES}
+        ndt_omp
+        )

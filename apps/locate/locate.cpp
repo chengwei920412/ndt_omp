@@ -26,19 +26,23 @@ pcl::PointCloud<pcl::PointXYZ>::Ptr align(pcl::Registration<pcl::PointXYZ, pcl::
     auto t2 = ros::WallTime::now();
     std::cout << "single : " << (t2 - t1).toSec() * 1000 << "[msec]" << std::endl;
 
-    for(int i=0; i<10; i++) {
-        registration->align(*aligned);
-    }
-    auto t3 = ros::WallTime::now();
-
     est_traansformation = registration->getFinalTransformation();
 
-    std::cout << "10times: " << (t3 - t2).toSec() * 1000 << "[msec]" << std::endl;
     std::cout << "fitness: " << registration->getFitnessScore() << std::endl << std::endl;
-    std::cout << "transfrom: \n" << est_traansformation << std::endl << std::endl;
-
-
+    std::cout << "est_transfrom: \n" << est_traansformation << std::endl << std::endl;
     return aligned;
+}
+
+Eigen::Matrix4f noisedSmallTransform(double translation_scale, double rotation_scale) {
+    Eigen::Matrix4f noise;
+    Eigen::Vector3f trans_delta = translation_scale * Eigen::Vector3f::Random();
+    Eigen::Vector3f rotate_delta = rotation_scale * Eigen::Vector3f::Random();
+    Eigen::Quaternionf quat_delta(1.0, rotate_delta.x(), rotate_delta.y(), rotate_delta.z());
+    quat_delta.normalize();
+    noise.setIdentity();
+    noise.topLeftCorner(3,3) = quat_delta.toRotationMatrix();
+    noise.topRightCorner(3,1) = trans_delta;
+    return noise;
 }
 
 int main(int argc, char ** argv) {
@@ -66,6 +70,7 @@ int main(int argc, char ** argv) {
     ros::Time::init();
 
     for (int i = 0; i < lidar_pcd_vector.size(); i++ ) {
+        std::cout << "\n ************************ \n" << std::endl;
         pcl::PointCloud<pcl::PointXYZ>::Ptr target_cloud(new pcl::PointCloud<pcl::PointXYZ>());
         pcl::PointCloud<pcl::PointXYZ>::Ptr source_cloud(new pcl::PointCloud<pcl::PointXYZ>());
 
@@ -96,16 +101,21 @@ int main(int argc, char ** argv) {
         voxelgrid.filter(*downsampled);
         source_cloud = downsampled;
 
+        Eigen::Matrix4f noised_transform = noisedSmallTransform(5, 1);
+        std::cout << "original transform: \n" << noised_transform << std::endl;
+
+
         pclomp::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointXYZ>::Ptr ndt_omp(new pclomp::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointXYZ>());
         ndt_omp->setResolution(1.0);
-
-
         ndt_omp->setNumThreads(8);
         ndt_omp->setNeighborhoodSearchMethod(pclomp::DIRECT7);
         Eigen::Matrix4f est_transform;
         pcl::PointCloud<pcl::PointXYZ>::Ptr aligned = align(ndt_omp, target_cloud, source_cloud, est_transform);
 
-
+        Eigen::Matrix3f rot = est_transform.topLeftCorner(3,3);
+        Eigen::Vector3f ea = rot.eulerAngles(0, 1, 2);
+        std::cout << "rotation : " << ea.transpose()  << endl;
+        std::cout << "translate: " << est_transform.topRightCorner(3,1).transpose() << endl << endl;
 
 
     }
